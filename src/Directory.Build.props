@@ -14,8 +14,8 @@
 
     <Company>William Kent</Company>
     <Authors>William Kent</Authors>
-    <Copyright>© William Kent. All rights reserved.</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright © 2019 William Kent. All rights reserved.</Copyright>
+    <PackageLicenseExpression>MS-RL</PackageLicenseExpression>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
