@@ -10,6 +10,15 @@
       },
       "fileNamingConvention": "metadata",
       "xmlHeader": false
+    },
+
+    "layoutRules": {
+      "newlineAtEndOfFile": "require"
+    },
+
+    "orderingRules": {
+      "usingDirectivesPlacement": "outsideNamespace",
+      "systemUsingDirectivesFirst": true
     }
   }
 }
