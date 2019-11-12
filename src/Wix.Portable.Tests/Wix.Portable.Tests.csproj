@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Library\Library.csproj" />
+    <ProjectReference Include="..\Wix.Portable\Wix.Portable.csproj" />
   </ItemGroup>
 
   <ItemGroup>
