@@ -5,6 +5,8 @@ using System;
 using System.CodeDom;
 using System.CodeDom.Compiler;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Resources;
@@ -20,44 +22,28 @@ namespace WixBuildTools.MsgGen
     /// </summary>
     public class MsgGenMain
     {
-        /// <summary>
-        /// The main entry point for MsgGen.
-        /// </summary>
-        /// <param name="args">Commandline arguments for the application.</param>
-        /// <returns>Returns the application error code.</returns>
-        [STAThread]
-        public static int Main(string[] args)
-        {
-            try
-            {
-                MsgGenMain msgGen = new MsgGenMain(args);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("MsgGen.exe : fatal error MSGG0000: {0}\r\n\r\nStack Trace:\r\n{1}", e.Message, e.StackTrace);
-                if (e is NullReferenceException || e is SEHException)
-                {
-                    throw;
-                }
-                return 2;
-            }
-
-            return 0;
-        }
-
         private bool showLogo;
         private bool showHelp;
 
-        private string sourceFile;
-        private string destClassFile;
-        private string destResourcesFile;
+        private string? sourceFile;
+        private string? destClassFile;
+        private string? destResourcesFile;
 
+        /// <summary>
+        /// The main entry point for MsgGen.
+        /// </summary>
         /// <summary>
         /// Main method for the MsgGen application within the MsgGenMain class.
         /// </summary>
         /// <param name="args">Commandline arguments to the application.</param>
+        [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1642:Constructor summary documentation should begin with standard text", Justification = "This is not a typical constructor; it is part of the main method.")]
         public MsgGenMain(string[] args)
         {
+            if (args == null)
+            {
+                throw new ArgumentNullException(nameof(args));
+            }
+
             this.showLogo = true;
             this.showHelp = false;
 
@@ -68,24 +54,26 @@ namespace WixBuildTools.MsgGen
             // parse the command line
             this.ParseCommandLine(args);
 
-            if (null == this.sourceFile || null == this.destClassFile)
+            if (this.sourceFile == null || this.destClassFile == null)
             {
                 this.showHelp = true;
             }
-            if (null == this.destResourcesFile)
+
+            if (this.destResourcesFile == null && this.destClassFile != null)
             {
                 this.destResourcesFile = Path.ChangeExtension(this.destClassFile, ".resources");
             }
 
             // get the assemblies
-            Assembly msgGenAssembly = Assembly.GetExecutingAssembly();
+            var msgGenAssembly = Assembly.GetExecutingAssembly();
 
             if (this.showLogo)
             {
-                Console.WriteLine("Microsoft (R) Message Generation Tool version {0}", msgGenAssembly.GetName().Version.ToString());
+                Console.WriteLine("Microsoft (R) Message Generation Tool version {0}", msgGenAssembly.GetName().Version!.ToString());
                 Console.WriteLine("Copyright (C) Microsoft Corporation 2004. All rights reserved.");
                 Console.WriteLine();
             }
+
             if (this.showHelp)
             {
                 Console.WriteLine(" usage:  MsgGen.exe [-?] [-nologo] sourceFile destClassFile [destResourcesFile]");
@@ -97,38 +85,57 @@ namespace WixBuildTools.MsgGen
             }
 
             // load the schema
-            XmlReader reader = null;
-            XmlSchemaCollection schemaCollection = null;
-            try
+            var schemaCollection = new XmlSchemaSet();
+            using (var reader = XmlReader.Create(msgGenAssembly.GetManifestResourceStream("WixBuildTools.MsgGen.Xsd.messages.xsd")))
             {
-                reader = new XmlTextReader(msgGenAssembly.GetManifestResourceStream("WixBuildTools.MsgGen.Xsd.messages.xsd"));
-                schemaCollection = new XmlSchemaCollection();
                 schemaCollection.Add("http://schemas.microsoft.com/genmsgs/2004/07/messages", reader);
-            }
-            finally
-            {
-                reader.Close();
             }
 
             // load the source file and process it
-            using (StreamReader sr = new StreamReader(this.sourceFile))
-            {
-                XmlParserContext context = new XmlParserContext(null, null, null, XmlSpace.None);
-                XmlValidatingReader validatingReader = new XmlValidatingReader(sr.BaseStream, XmlNodeType.Document, context);
-                validatingReader.Schemas.Add(schemaCollection);
+            var readerSettings = new XmlReaderSettings();
+            readerSettings.Schemas = schemaCollection;
 
-                XmlDocument errorsDoc = new XmlDocument();
+#pragma warning disable CS8604 // Possible null reference argument (false positive)
+            using (var sr = new StreamReader(this.sourceFile))
+            using (var validatingReader = XmlReader.Create(sr, readerSettings))
+            {
+                var errorsDoc = new XmlDocument();
                 errorsDoc.Load(validatingReader);
 
-                CodeCompileUnit codeCompileUnit = new CodeCompileUnit();
+                var codeCompileUnit = new CodeCompileUnit();
 
-                using (ResourceWriter resourceWriter = new ResourceWriter(this.destResourcesFile))
+                using (var resourceWriter = new ResourceWriter(this.destResourcesFile))
                 {
                     GenerateMessageFiles.Generate(errorsDoc, codeCompileUnit, resourceWriter);
-
-                    GenerateCSharpCode(codeCompileUnit, this.destClassFile);
                 }
+
+                GenerateCSharpCode(codeCompileUnit, this.destClassFile);
             }
+#pragma warning restore CS8604
+        }
+
+        /// <summary>Main entry point when run as program.</summary>
+        /// <param name="args">Commandline arguments for the application.</param>
+        /// <returns>Returns the application error code.</returns>
+        [STAThread]
+        public static int Main(string[] args)
+        {
+            try
+            {
+                var msgGen = new MsgGenMain(args);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("MsgGen.exe : fatal error MSGG0000: {0}\r\n\r\nStack Trace:\r\n{1}", e.Message, e.StackTrace);
+                if (e is NullReferenceException || e is SEHException)
+                {
+                    throw;
+                }
+
+                return 2;
+            }
+
+            return 0;
         }
 
         /// <summary>
@@ -139,24 +146,21 @@ namespace WixBuildTools.MsgGen
         public static void GenerateCSharpCode(CodeCompileUnit codeCompileUnit, string destClassFile)
         {
             // generate the code with the C# code provider
-            CSharpCodeProvider provider = new CSharpCodeProvider();
-
-            // obtain an ICodeGenerator from the CodeDomProvider class
-            ICodeGenerator gen = provider.CreateGenerator();
+            using var provider = new CSharpCodeProvider();
 
             // create a TextWriter to a StreamWriter to the output file
-            using (StreamWriter sw = new StreamWriter(destClassFile))
+            using (var sw = new StreamWriter(destClassFile))
             {
-                using (IndentedTextWriter tw = new IndentedTextWriter(sw, "    "))
+                using (var tw = new IndentedTextWriter(sw, "    "))
                 {
-                    CodeGeneratorOptions options = new CodeGeneratorOptions();
+                    var options = new CodeGeneratorOptions();
 
                     // code generation options
                     options.BlankLinesBetweenMembers = true;
                     options.BracingStyle = "C";
 
                     // generate source code using the code generator
-                    gen.GenerateCodeFromCompileUnit(codeCompileUnit, tw, options);
+                    provider.GenerateCodeFromCompileUnit(codeCompileUnit, tw, options);
                 }
             }
         }
@@ -170,85 +174,89 @@ namespace WixBuildTools.MsgGen
             for (int i = 0; i < args.Length; ++i)
             {
                 string arg = args[i];
-                if (null == arg || "" == arg)   // skip blank arguments
+                if (string.IsNullOrEmpty(arg))
                 {
+                    // skip blank arguments
                     continue;
                 }
 
-                if ('-' == arg[0] || '/' == arg[0])
+                if (arg[0] == '-' || arg[0] == '/')
                 {
                     string parameter = arg.Substring(1);
-                    if ("nologo" == parameter)
+                    if (parameter == "nologo")
                     {
                         this.showLogo = false;
                     }
-                    else if ("?" == parameter || "help" == parameter)
+                    else if (parameter == "?" || parameter == "help")
                     {
                         this.showHelp = true;
                     }
                 }
-                else if ('@' == arg[0])
+                else if (arg[0] == '@')
                 {
-                    using (StreamReader reader = new StreamReader(arg.Substring(1)))
+                    using (var reader = new StreamReader(arg.Substring(1)))
                     {
-                        string line;
-                        ArrayList newArgs = new ArrayList();
+                        string? line;
+                        var newArgs = new ArrayList();
 
-                        while (null != (line = reader.ReadLine()))
+                        while ((line = reader.ReadLine()) != null)
                         {
-                            string newArg = "";
+                            string newArg = string.Empty;
                             bool betweenQuotes = false;
                             for (int j = 0; j < line.Length; ++j)
                             {
                                 // skip whitespace
-                                if (!betweenQuotes && (' ' == line[j] || '\t' == line[j]))
+                                if (!betweenQuotes && (line[j] == ' ' || line[j] == '\t'))
                                 {
-                                    if ("" != newArg)
+                                    if (!string.IsNullOrEmpty(newArg))
                                     {
                                         newArgs.Add(newArg);
-                                        newArg = null;
+                                        newArg = string.Empty;
                                     }
 
                                     continue;
                                 }
 
                                 // if we're escaping a quote
-                                if ('\\' == line[j] && '"' == line[j])
+                                if (line[j] == '\\' && line[j] == '"')
                                 {
                                     ++j;
                                 }
-                                else if ('"' == line[j])   // if we've hit a new quote
+                                else if (line[j] == '"')
                                 {
+                                    // if we've hit a new quote
                                     betweenQuotes = !betweenQuotes;
                                     continue;
                                 }
 
-                                newArg = String.Concat(newArg, line[j]);
+                                newArg = string.Concat(newArg, line[j]);
                             }
-                            if ("" != newArg)
+
+                            if (!string.IsNullOrEmpty(newArg))
                             {
                                 newArgs.Add(newArg);
                             }
                         }
+
                         string[] ar = (string[])newArgs.ToArray(typeof(string));
                         this.ParseCommandLine(ar);
                     }
                 }
-                else if (null == this.sourceFile)
+                else if (this.sourceFile == null)
                 {
                     this.sourceFile = arg;
                 }
-                else if (null == this.destClassFile)
+                else if (this.destClassFile == null)
                 {
                     this.destClassFile = arg;
                 }
-                else if (null == this.destResourcesFile)
+                else if (this.destResourcesFile == null)
                 {
                     this.destResourcesFile = arg;
                 }
                 else
                 {
-                    throw new ArgumentException(String.Format("Unknown argument '{0}'.", arg));
+                    throw new ArgumentException(string.Format(CultureInfo.CurrentCulture, "Unknown argument '{0}'.", arg));
                 }
             }
         }
