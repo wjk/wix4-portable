@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netcoreapp3.0</TargetFramework>
+    <OutputType>Exe</OutputType>
     <NoWarn>CA1303</NoWarn>
   </PropertyGroup>
 
