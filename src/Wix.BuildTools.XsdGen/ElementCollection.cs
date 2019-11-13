@@ -1,41 +1,45 @@
-// Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information.
+// Copyright (c) William Kent and .NET Foundation. All rights reserved.
+// Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+
+using System;
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+
+#pragma warning disable CS8606 // Possible null reference assignment to iteration variable (multiple false positives).
 
 namespace WixToolset.Serialize
 {
-    using System;
-    using System.Collections;
-    using System.Globalization;
-
     /// <summary>
     /// Collection used in the CodeDOM for the children of a given element. Provides type-checking
     /// on the allowed children to ensure that only allowed types are added.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1010:Collections should implement generic interface", Justification = "Heterogeneous collection cannot use ICollection<T>")]
     public class ElementCollection : ICollection, IEnumerable
     {
-        private CollectionType collectionType;
         private int minimum = 1;
         private int maximum = 1;
-        private int totalContainedItems;
         private int containersUsed;
         private ArrayList items;
 
         /// <summary>
-        /// Creates a new element collection.
+        /// Initializes a new instance of the <see cref="ElementCollection"/> class.
         /// </summary>
         /// <param name="collectionType">Type of the collection to create.</param>
         public ElementCollection(CollectionType collectionType)
         {
-            this.collectionType = collectionType;
+            this.Type = collectionType;
             this.items = new ArrayList();
         }
 
         /// <summary>
-        /// Creates a new element collection.
+        /// Initializes a new instance of the <see cref="ElementCollection"/> class.
         /// </summary>
         /// <param name="collectionType">Type of the collection to create.</param>
         /// <param name="minimum">When used with a type 'Choice', specifies a minimum number of allowed children.</param>
         /// <param name="maximum">When used with a type 'Choice', specifies a maximum number of allowed children.</param>
-        public ElementCollection(CollectionType collectionType, int minimum, int maximum) : this(collectionType)
+        public ElementCollection(CollectionType collectionType, int minimum, int maximum)
+            : this(collectionType)
         {
             this.minimum = minimum;
             this.maximum = maximum;
@@ -54,29 +58,23 @@ namespace WixToolset.Serialize
             /// <summary>
             /// A sequence type, corresponding to the XSD sequence element.
             /// </summary>
-            Sequence
+            Sequence,
         }
 
         /// <summary>
         /// Gets the type of collection.
         /// </summary>
         /// <value>The type of collection.</value>
-        public CollectionType Type
-        {
-            get { return this.collectionType; }
-        }
+        public CollectionType Type { get; }
 
         /// <summary>
         /// Gets the count of child elements in this collection (counts ISchemaElements, not nested collections).
         /// </summary>
         /// <value>The count of child elements in this collection (counts ISchemaElements, not nested collections).</value>
-        public int Count
-        {
-            get { return this.totalContainedItems; }
-        }
+        public int Count { get; private set; }
 
         /// <summary>
-        /// Gets the flag specifying whether this collection is synchronized. Always returns false.
+        /// Gets a value indicating whether this collection is synchronized. Always returns false.
         /// </summary>
         /// <value>The flag specifying whether this collection is synchronized. Always returns false.</value>
         public bool IsSynchronized
@@ -100,32 +98,35 @@ namespace WixToolset.Serialize
         /// <exception cref="ArgumentException">Thrown if the child is not of an allowed type.</exception>
         public void AddElement(ISchemaElement element)
         {
+            if (element == null)
+            {
+                throw new ArgumentNullException(nameof(element));
+            }
+
             foreach (object obj in this.items)
             {
                 bool containerUsed;
 
-                CollectionItem collectionItem = obj as CollectionItem;
-                if (collectionItem != null)
+                if (obj is CollectionItem collectionItem)
                 {
                     containerUsed = collectionItem.Elements.Count != 0;
                     if (collectionItem.ElementType.IsAssignableFrom(element.GetType()))
                     {
                         collectionItem.AddElement(element);
-                        
+
                         if (!containerUsed)
                         {
                             this.containersUsed++;
                         }
 
-                        this.totalContainedItems++;
+                        this.Count++;
                         return;
                     }
 
                     continue;
                 }
 
-                ElementCollection collection = obj as ElementCollection;
-                if (collection != null)
+                if (obj is ElementCollection collection)
                 {
                     containerUsed = collection.Count != 0;
 
@@ -138,7 +139,7 @@ namespace WixToolset.Serialize
                             this.containersUsed++;
                         }
 
-                        this.totalContainedItems++;
+                        this.Count++;
                         return;
                     }
                     catch (ArgumentException)
@@ -150,7 +151,7 @@ namespace WixToolset.Serialize
                 }
             }
 
-            throw new ArgumentException(String.Format(
+            throw new ArgumentException(string.Format(
                 CultureInfo.InvariantCulture,
                 "Element of type {0} is not valid for this collection.",
                 element.GetType().Name));
@@ -163,10 +164,14 @@ namespace WixToolset.Serialize
         /// <exception cref="ArgumentException">Thrown if the element is not of an allowed type.</exception>
         public void RemoveElement(ISchemaElement element)
         {
+            if (element == null)
+            {
+                throw new ArgumentNullException(nameof(element));
+            }
+
             foreach (object obj in this.items)
             {
-                CollectionItem collectionItem = obj as CollectionItem;
-                if (collectionItem != null)
+                if (obj is CollectionItem collectionItem)
                 {
                     if (collectionItem.ElementType.IsAssignableFrom(element.GetType()))
                     {
@@ -176,21 +181,20 @@ namespace WixToolset.Serialize
                         }
 
                         collectionItem.RemoveElement(element);
-                        
+
                         if (collectionItem.Elements.Count == 0)
                         {
                             this.containersUsed--;
                         }
 
-                        this.totalContainedItems--;
+                        this.Count--;
                         return;
                     }
 
                     continue;
                 }
 
-                ElementCollection collection = obj as ElementCollection;
-                if (collection != null)
+                if (obj is ElementCollection collection)
                 {
                     if (collection.Count == 0)
                     {
@@ -206,7 +210,7 @@ namespace WixToolset.Serialize
                             this.containersUsed--;
                         }
 
-                        this.totalContainedItems--;
+                        this.Count--;
                         return;
                     }
                     catch (ArgumentException)
@@ -218,7 +222,7 @@ namespace WixToolset.Serialize
                 }
             }
 
-            throw new ArgumentException(String.Format(
+            throw new ArgumentException(string.Format(
                 CultureInfo.InvariantCulture,
                 "Element of type {0} is not valid for this collection.",
                 element.GetType().Name));
@@ -231,6 +235,11 @@ namespace WixToolset.Serialize
         /// <param name="index">Offset into the array.</param>
         public void CopyTo(Array array, int index)
         {
+            if (array == null)
+            {
+                throw new ArgumentNullException(nameof(array));
+            }
+
             int item = 0;
             foreach (ISchemaElement element in this)
             {
@@ -256,10 +265,14 @@ namespace WixToolset.Serialize
         /// <exception cref="ArgumentException">Thrown if the type isn't a valid child type.</exception>
         public IEnumerable Filter(Type childType)
         {
+            if (childType == null)
+            {
+                throw new ArgumentNullException(nameof(childType));
+            }
+
             foreach (object container in this.items)
             {
-                CollectionItem collectionItem = container as CollectionItem;
-                if (collectionItem != null)
+                if (container is CollectionItem collectionItem)
                 {
                     if (collectionItem.ElementType.IsAssignableFrom(childType))
                     {
@@ -269,20 +282,19 @@ namespace WixToolset.Serialize
                     continue;
                 }
 
-                ElementCollection elementCollection = container as ElementCollection;
-                if (elementCollection != null)
+                if (container is ElementCollection elementCollection)
                 {
                     IEnumerable nestedFilter = elementCollection.Filter(childType);
                     if (nestedFilter != null)
                     {
                         return nestedFilter;
                     }
-                    
+
                     continue;
                 }
             }
 
-            throw new ArgumentException(String.Format(
+            throw new ArgumentException(string.Format(
                 CultureInfo.InvariantCulture,
                 "Type {0} is not valid for this collection.",
                 childType.Name));
@@ -310,13 +322,14 @@ namespace WixToolset.Serialize
         /// Class used to represent a given type in the child collection of an element. Abstract,
         /// has subclasses for choice and sequence (which can do cardinality checks).
         /// </summary>
+        [SuppressMessage("Design", "CA1034:Nested types should not be visible", Justification = "By design.")]
         public abstract class CollectionItem
         {
             private Type elementType;
             private ArrayList elements;
 
             /// <summary>
-            /// Creates a new CollectionItem for the given element type.
+            /// Initializes a new instance of the <see cref="CollectionItem"/> class for the given element type.
             /// </summary>
             /// <param name="elementType">Type of the element for this collection item.</param>
             public CollectionItem(Type elementType)
@@ -349,15 +362,20 @@ namespace WixToolset.Serialize
             /// <exception cref="ArgumentException">Thrown if the type isn't assignable to the collection's type.</exception>
             public void AddElement(ISchemaElement element)
             {
+                if (element == null)
+                {
+                    throw new ArgumentNullException(nameof(element));
+                }
+
                 if (!this.elementType.IsAssignableFrom(element.GetType()))
                 {
                     throw new ArgumentException(
-                        String.Format(
-                            CultureInfo.InvariantCulture, 
-                            "Element must be a subclass of {0}, but was of type {1}.", 
-                            this.elementType.Name, 
-                            element.GetType().Name), 
-                        "element");
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Element must be a subclass of {0}, but was of type {1}.",
+                            this.elementType.Name,
+                            element.GetType().Name),
+                        nameof(element));
                 }
 
                 this.elements.Add(element);
@@ -370,15 +388,20 @@ namespace WixToolset.Serialize
             /// <exception cref="ArgumentException">Thrown if the element's type isn't assignable to the collection's type.</exception>
             public void RemoveElement(ISchemaElement element)
             {
+                if (element == null)
+                {
+                    throw new ArgumentNullException(nameof(element));
+                }
+
                 if (!this.elementType.IsAssignableFrom(element.GetType()))
                 {
                     throw new ArgumentException(
-                        String.Format(
-                            CultureInfo.InvariantCulture, 
-                            "Element must be a subclass of {0}, but was of type {1}.", 
-                            this.elementType.Name, 
-                            element.GetType().Name), 
-                        "element");
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Element must be a subclass of {0}, but was of type {1}.",
+                            this.elementType.Name,
+                            element.GetType().Name),
+                        nameof(element));
                 }
 
                 this.elements.Remove(element);
@@ -388,13 +411,15 @@ namespace WixToolset.Serialize
         /// <summary>
         /// Class representing a choice item. Doesn't do cardinality checks.
         /// </summary>
+        [SuppressMessage("Design", "CA1034:Nested types should not be visible", Justification = "By design.")]
         public class ChoiceItem : CollectionItem
         {
             /// <summary>
-            /// Creates a new choice item.
+            /// Initializes a new instance of the <see cref="ChoiceItem"/> class.
             /// </summary>
             /// <param name="elementType">Type of the created item.</param>
-            public ChoiceItem(Type elementType) : base(elementType)
+            public ChoiceItem(Type elementType)
+                : base(elementType)
             {
             }
         }
@@ -402,26 +427,29 @@ namespace WixToolset.Serialize
         /// <summary>
         /// Class representing a sequence item. Can do cardinality checks, if required.
         /// </summary>
+        [SuppressMessage("Design", "CA1034:Nested types should not be visible", Justification = "By design.")]
         public class SequenceItem : CollectionItem
         {
             private int minimum = 1;
             private int maximum = 1;
 
             /// <summary>
-            /// Creates a new sequence item.
+            /// Initializes a new instance of the <see cref="SequenceItem"/> class.
             /// </summary>
             /// <param name="elementType">Type of the created item.</param>
-            public SequenceItem(Type elementType) : base(elementType)
+            public SequenceItem(Type elementType)
+                : base(elementType)
             {
             }
 
             /// <summary>
-            /// Creates a new sequence item with the specified minimum and maximum.
+            /// Initializes a new instance of the <see cref="SequenceItem"/> class with the specified minimum and maximum.
             /// </summary>
             /// <param name="elementType">Type of the created item.</param>
             /// <param name="minimum">Minimum number of elements.</param>
             /// <param name="maximum">Maximum number of elements.</param>
-            public SequenceItem(Type elementType, int minimum, int maximum) : base(elementType)
+            public SequenceItem(Type elementType, int minimum, int maximum)
+                : base(elementType)
             {
                 this.minimum = minimum;
                 this.maximum = maximum;
@@ -434,10 +462,10 @@ namespace WixToolset.Serialize
         private class ElementCollectionEnumerator : IEnumerator
         {
             private ElementCollection collection;
-            private Stack collectionStack;
+            private Stack? collectionStack;
 
             /// <summary>
-            /// Creates a new ElementCollectionEnumerator.
+            /// Initializes a new instance of the <see cref="ElementCollectionEnumerator"/> class.
             /// </summary>
             /// <param name="collection">The collection to create an enumerator for.</param>
             public ElementCollectionEnumerator(ElementCollection collection)
@@ -448,22 +476,26 @@ namespace WixToolset.Serialize
             /// <summary>
             /// Gets the current object from the enumerator.
             /// </summary>
-            public object Current
+            public object? Current
             {
                 get
                 {
                     if (this.collectionStack != null && this.collectionStack.Count > 0)
                     {
                         CollectionTuple tuple = (CollectionTuple)this.collectionStack.Peek();
-                        object container = tuple.Collection.items[tuple.ContainerIndex];
-                        
-                        CollectionItem collectionItem = container as CollectionItem;
-                        if (collectionItem != null)
+                        object? container = tuple.Collection.items[tuple.ContainerIndex];
+
+                        if (container == null)
+                        {
+                            throw new InvalidOperationException("tuple.Collection.items contained null item");
+                        }
+
+                        if (container is CollectionItem collectionItem)
                         {
                             return collectionItem.Elements[tuple.ItemIndex];
                         }
 
-                        throw new InvalidOperationException(String.Format(
+                        throw new InvalidOperationException(string.Format(
                             CultureInfo.InvariantCulture,
                             "Element of type {0} found in enumerator. Must be ChoiceItem or SequenceItem.",
                             container.GetType().Name));
@@ -526,10 +558,15 @@ namespace WixToolset.Serialize
             {
                 if (collection.Count <= 0)
                 {
-                    throw new ArgumentException(String.Format(
+                    throw new ArgumentException(string.Format(
                         CultureInfo.InvariantCulture,
                         "Collection has {0} elements. Must have at least one.",
                         collection.Count));
+                }
+
+                if (this.collectionStack == null)
+                {
+                    throw new InvalidOperationException("collectionStack is null");
                 }
 
                 CollectionTuple tuple = new CollectionTuple(collection);
@@ -544,10 +581,9 @@ namespace WixToolset.Serialize
             /// <returns>True if a next element is found, false otherwise.</returns>
             private bool FindNext(CollectionTuple tuple)
             {
-                object container = tuple.Collection.items[tuple.ContainerIndex];
-                        
-                CollectionItem collectionItem = container as CollectionItem;
-                if (collectionItem != null)
+                object? container = tuple.Collection.items[tuple.ContainerIndex];
+
+                if (container is CollectionItem collectionItem)
                 {
                     if (tuple.ItemIndex + 1 < collectionItem.Elements.Count)
                     {
@@ -556,8 +592,7 @@ namespace WixToolset.Serialize
                     }
                 }
 
-                ElementCollection elementCollection = container as ElementCollection;
-                if (elementCollection != null && elementCollection.Count > 0 && tuple.ItemIndex == -1)
+                if (container is ElementCollection elementCollection && elementCollection.Count > 0 && tuple.ItemIndex == -1)
                 {
                     tuple.ItemIndex++;
                     this.PushCollection(elementCollection);
@@ -568,10 +603,9 @@ namespace WixToolset.Serialize
 
                 for (int i = tuple.ContainerIndex + 1; i < tuple.Collection.items.Count; ++i)
                 {
-                    object nestedContainer = tuple.Collection.items[i];
-                        
-                    CollectionItem nestedCollectionItem = nestedContainer as CollectionItem;
-                    if (nestedCollectionItem != null)
+                    object? nestedContainer = tuple.Collection.items[i];
+
+                    if (nestedContainer is CollectionItem nestedCollectionItem)
                     {
                         if (nestedCollectionItem.Elements.Count > 0)
                         {
@@ -580,8 +614,7 @@ namespace WixToolset.Serialize
                         }
                     }
 
-                    ElementCollection nestedElementCollection = nestedContainer as ElementCollection;
-                    if (nestedElementCollection != null && nestedElementCollection.Count > 0)
+                    if (nestedContainer is ElementCollection nestedElementCollection && nestedElementCollection.Count > 0)
                     {
                         tuple.ContainerIndex = i;
                         this.PushCollection(nestedElementCollection);
@@ -603,7 +636,7 @@ namespace WixToolset.Serialize
                 private int itemIndex = -1;
 
                 /// <summary>
-                /// Creates a new CollectionTuple.
+                /// Initializes a new instance of the <see cref="CollectionTuple"/> class.
                 /// </summary>
                 /// <param name="collection">The collection for the tuple.</param>
                 public CollectionTuple(ElementCollection collection)
@@ -620,7 +653,7 @@ namespace WixToolset.Serialize
                 }
 
                 /// <summary>
-                /// Gets and sets the index of the container in the collection.
+                /// Gets or sets the index of the container in the collection.
                 /// </summary>
                 public int ContainerIndex
                 {
@@ -629,7 +662,7 @@ namespace WixToolset.Serialize
                 }
 
                 /// <summary>
-                /// Gets and sets the index of the item in the container.
+                /// Gets or sets the index of the item in the container.
                 /// </summary>
                 public int ItemIndex
                 {
