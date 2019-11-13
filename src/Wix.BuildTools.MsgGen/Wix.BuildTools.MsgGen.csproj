@@ -11,5 +11,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Xsd\messages.xsd" />
+    <None Include="Wix.BuildTools.MsgGen.targets" />
   </ItemGroup>
 </Project>
