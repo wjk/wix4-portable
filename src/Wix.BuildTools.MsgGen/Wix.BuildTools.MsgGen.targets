@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information. -->
+<!--
+Copyright (c) William Kent and .NET Foundation. All rights reserved.
+Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+-->
 
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
-  <PropertyGroup>
-    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
-  </PropertyGroup>
-
   <ItemGroup>
     <!--Provide support for setting type (BuildAction) from VS-->
     <AvailableItemName Include="MsgGenSource" />
   </ItemGroup>
 
   <PropertyGroup>
-    <MsgGenPath Condition=" '$(MsgGenPath)'=='' ">$(MSBuildThisFileDirectory)..\tools\</MsgGenPath>
+    <MsgGenPath Condition=" '$(MsgGenPath)'=='' ">$(RepoRootPath)bin\Wix.BuildTools.MsgGen\$(Configuration)\netcoreapp3.0\</MsgGenPath>
   </PropertyGroup>
 
   <!--
@@ -47,7 +46,7 @@
     Outputs="$(IntermediateOutputPath)%(MsgGenSource.Filename).cs;
              $(IntermediateOutputPath)%(MsgGenSource.ResourcesLogicalName)">
 
-    <Exec Command="&quot;$(MsgGenPath)WixBuildTools.MsgGen.exe&quot; -nologo &quot;%(MsgGenSource.FullPath)&quot; &quot;$(MsgGenCsFile)&quot; &quot;$(MsgGenResourcesFile)&quot;"
+    <Exec Command="&quot;$(MsgGenPath)Wix.BuildTools.MsgGen.exe&quot; -nologo &quot;%(MsgGenSource.FullPath)&quot; &quot;$(MsgGenCsFile)&quot; &quot;$(MsgGenResourcesFile)&quot;"
           Outputs="$(MsgGenCsFile);$(MsgGenResourcesFile)" />
 
     <ItemGroup>
