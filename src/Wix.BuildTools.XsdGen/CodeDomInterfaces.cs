@@ -1,18 +1,21 @@
-// Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information.
+// Copyright (c) William Kent and .NET Foundation. All rights reserved.
+// Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+
+using System;
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using System.Xml;
 
 namespace WixToolset.Serialize
 {
-    using System;
-    using System.Collections;
-    using System.Xml;
-
     /// <summary>
     /// Interface for generated schema elements.
     /// </summary>
+    [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1649:File name should match first type name", Justification = "Multiple interfaces in one file is by design.")]
     public interface ISchemaElement
     {
         /// <summary>
-        /// Gets and sets the parent of this element. May be null.
+        /// Gets or sets the parent of this element. May be null.
         /// </summary>
         /// <value>An ISchemaElement that has this element as a child.</value>
         ISchemaElement ParentElement
@@ -20,7 +23,7 @@ namespace WixToolset.Serialize
             get;
             set;
         }
-    
+
         /// <summary>
         /// Outputs xml representing this element, including the associated attributes
         /// and any nested elements.
@@ -49,6 +52,7 @@ namespace WixToolset.Serialize
         /// by the passed in type.
         /// </summary>
         /// <param name="childType">The type of children to retrieve.</param>
+        [SuppressMessage("Design", "CA1043:Use Integral Or String Argument For Indexers", Justification = "Upstream designed it this way.")]
         IEnumerable this[Type childType]
         {
             get;
