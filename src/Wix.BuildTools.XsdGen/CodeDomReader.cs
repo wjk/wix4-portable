@@ -1,12 +1,14 @@
-// Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information.
+// Copyright (c) William Kent and .NET Foundation. All rights reserved.
+// Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+
+using System;
+using System.Reflection;
+using System.Xml;
+
+#pragma warning disable CS8606 // Possible null reference assignment to iteration variable (multiple false positives).
 
 namespace WixToolset.Serialize
 {
-    using System;
-    using System.Collections;
-    using System.Reflection;
-    using System.Xml;
-
     /// <summary>
     /// Class used for reading XML files in to the CodeDom.
     /// </summary>
@@ -15,7 +17,7 @@ namespace WixToolset.Serialize
         private Assembly[] assemblies;
 
         /// <summary>
-        /// Creates a new CodeDomReader, using the current assembly.
+        /// Initializes a new instance of the <see cref="CodeDomReader"/> class, using the current assembly.
         /// </summary>
         public CodeDomReader()
         {
@@ -23,10 +25,10 @@ namespace WixToolset.Serialize
         }
 
         /// <summary>
-        /// Creates a new CodeDomReader, and takes in a list of assemblies in which to
-        /// look for elements.
+        /// Initializes a new instance of the <see cref="CodeDomReader"/> class, and
+        /// takes in a list of assemblies in which to look for elements.
         /// </summary>
-        /// <param name="assemblies">Assemblies in which to look for types that correspond 
+        /// <param name="assemblies">Assemblies in which to look for types that correspond
         /// to elements.</param>
         public CodeDomReader(Assembly[] assemblies)
         {
@@ -42,12 +44,11 @@ namespace WixToolset.Serialize
         {
             XmlDocument document = new XmlDocument();
             document.Load(filePath);
-            ISchemaElement schemaElement = null;
+            ISchemaElement? schemaElement = null;
 
             foreach (XmlNode node in document.ChildNodes)
             {
-                XmlElement element = node as XmlElement;
-                if (element != null)
+                if (node is XmlElement element)
                 {
                     if (schemaElement != null)
                     {
@@ -58,6 +59,12 @@ namespace WixToolset.Serialize
                     this.ParseObjectFromElement(schemaElement, element);
                 }
             }
+
+            if (schemaElement == null)
+            {
+                throw new InvalidOperationException("No root element found in file.");
+            }
+
             return schemaElement;
         }
 
@@ -66,21 +73,29 @@ namespace WixToolset.Serialize
         /// </summary>
         /// <param name="schemaElement">ISchemaElement to fill in.</param>
         /// <param name="element">XmlElement to parse from.</param>
-        private void ParseObjectFromElement(ISchemaElement schemaElement, XmlElement element)
+        private void ParseObjectFromElement(ISchemaElement? schemaElement, XmlElement element)
         {
             foreach (XmlAttribute attribute in element.Attributes)
             {
+                if (attribute == null)
+                {
+                    throw new InvalidOperationException("XmlElement.Attributes contains null attribute");
+                }
+
+                if (schemaElement == null)
+                {
+                    throw new ArgumentNullException(nameof(schemaElement));
+                }
+
                 this.SetAttributeOnObject(schemaElement, attribute.LocalName, attribute.Value);
             }
 
             foreach (XmlNode node in element.ChildNodes)
             {
-                XmlElement childElement = node as XmlElement;
-                if (childElement != null)
+                if (node is XmlElement childElement)
                 {
-                    ISchemaElement childSchemaElement = null;
-                    ICreateChildren createChildren = schemaElement as ICreateChildren;
-                    if (createChildren == null)
+                    ISchemaElement? childSchemaElement;
+                    if (!(schemaElement is ICreateChildren createChildren))
                     {
                         throw new InvalidOperationException("ISchemaElement with name " + element.LocalName + " does not implement ICreateChildren.");
                     }
@@ -104,9 +119,13 @@ namespace WixToolset.Serialize
                 }
                 else
                 {
-                    XmlText childText = node as XmlText;
-                    if (childText != null)
+                    if (node is XmlText childText)
                     {
+                        if (schemaElement == null)
+                        {
+                            throw new ArgumentNullException(nameof(schemaElement));
+                        }
+
                         this.SetAttributeOnObject(schemaElement, "Content", childText.Value);
                     }
                 }
@@ -121,12 +140,9 @@ namespace WixToolset.Serialize
         /// <param name="value">Value to set on the attribute.</param>
         private void SetAttributeOnObject(ISchemaElement schemaElement, string name, string value)
         {
-            ISetAttributes setAttributes = schemaElement as ISetAttributes;
-            if (setAttributes == null)
+            if (!(schemaElement is ISetAttributes setAttributes))
             {
-                throw new InvalidOperationException("ISchemaElement with name " 
-                    + schemaElement.GetType().FullName.ToString() 
-                    + " does not implement ISetAttributes.");
+                throw new InvalidOperationException($"ISchemaElement with name {schemaElement.GetType().FullName} does not implement ISetAttributes.");
             }
             else
             {
@@ -139,20 +155,26 @@ namespace WixToolset.Serialize
         /// </summary>
         /// <param name="element">XML Element to create an ISchemaElement from.</param>
         /// <returns>A constructed ISchemaElement.</returns>
-        private ISchemaElement CreateObjectFromElement(XmlElement element)
+        private ISchemaElement? CreateObjectFromElement(XmlElement element)
         {
-            ISchemaElement schemaElement = null;
+            ISchemaElement? schemaElement = null;
             foreach (Assembly assembly in this.assemblies)
             {
                 foreach (Type type in assembly.GetTypes())
                 {
-                    if (type.FullName.EndsWith(element.LocalName) 
+                    if (type == null || type.FullName == null)
+                    {
+                        throw new InvalidOperationException("assembly.GetTypes() returned null or invalid element");
+                    }
+
+                    if (type.FullName.EndsWith(element.LocalName, StringComparison.Ordinal)
                         && typeof(ISchemaElement).IsAssignableFrom(type))
                     {
-                        schemaElement = (ISchemaElement)Activator.CreateInstance(type);
+                        schemaElement = (ISchemaElement?)Activator.CreateInstance(type);
                     }
                 }
             }
+
             return schemaElement;
         }
     }
