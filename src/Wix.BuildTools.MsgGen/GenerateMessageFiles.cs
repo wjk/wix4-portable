@@ -1,19 +1,20 @@
-// Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information.
+// Copyright (c) William Kent and .NET Foundation. All rights reserved.
+// Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+
+using System;
+using System.CodeDom;
+using System.Collections;
+using System.Globalization;
+using System.Reflection;
+using System.Resources;
+using System.Xml;
 
 namespace WixBuildTools.MsgGen
 {
-    using System;
-    using System.CodeDom;
-    using System.Collections;
-    using System.Globalization;
-    using System.Reflection;
-    using System.Resources;
-    using System.Xml;
-
     /// <summary>
     /// Message files generation class.
     /// </summary>
-    public class GenerateMessageFiles
+    public sealed class GenerateMessageFiles
     {
         /// <summary>
         /// Generate the message files.
@@ -23,28 +24,28 @@ namespace WixBuildTools.MsgGen
         /// <param name="resourceWriter">Writer for default resource file.</param>
         public static void Generate(XmlDocument messagesDoc, CodeCompileUnit codeCompileUnit, ResourceWriter resourceWriter)
         {
-            Hashtable usedNumbers = new Hashtable();
+            var usedNumbers = new Hashtable();
 
-            if (null == messagesDoc)
+            if (messagesDoc == null)
             {
-                throw new ArgumentNullException("messagesDoc");
+                throw new ArgumentNullException(nameof(messagesDoc));
             }
 
-            if (null == codeCompileUnit)
+            if (codeCompileUnit == null)
             {
-                throw new ArgumentNullException("codeCompileUnit");
+                throw new ArgumentNullException(nameof(codeCompileUnit));
             }
 
-            if (null == resourceWriter)
+            if (resourceWriter == null)
             {
-                throw new ArgumentNullException("resourceWriter");
+                throw new ArgumentNullException(nameof(resourceWriter));
             }
 
             string namespaceAttr = messagesDoc.DocumentElement.GetAttribute("Namespace");
             string resourcesAttr = messagesDoc.DocumentElement.GetAttribute("Resources");
 
             // namespace
-            CodeNamespace messagesNamespace = new CodeNamespace(namespaceAttr);
+            var messagesNamespace = new CodeNamespace(namespaceAttr);
             codeCompileUnit.Namespaces.Add(messagesNamespace);
 
             // imports
@@ -56,8 +57,14 @@ namespace WixBuildTools.MsgGen
                 messagesNamespace.Imports.Add(new CodeNamespaceImport("WixToolset.Data"));
             }
 
+#pragma warning disable CS8606 // Possible null reference assignment to iteration variable (false positive)
             foreach (XmlElement classElement in messagesDoc.DocumentElement.ChildNodes)
             {
+                if (classElement == null)
+                {
+                    throw new InvalidOperationException("XmlElement is null");
+                }
+
                 string className = classElement.GetAttribute("Name");
                 string baseContainerName = classElement.GetAttribute("BaseContainerName");
                 string containerName = classElement.GetAttribute("ContainerName");
@@ -80,30 +87,35 @@ namespace WixBuildTools.MsgGen
                 // messages
                 foreach (XmlElement messageElement in classElement.ChildNodes)
                 {
+                    if (messageElement == null)
+                    {
+                        throw new InvalidOperationException("XmlElement is null");
+                    }
+
                     int number;
                     string id = messageElement.GetAttribute("Id");
                     string numberString = messageElement.GetAttribute("Number");
                     bool sourceLineNumbers = true;
 
                     // determine the message number (and ensure it was set properly)
-                    if (0 < numberString.Length)
+                    if (numberString.Length > 0)
                     {
                         number = Convert.ToInt32(numberString, CultureInfo.InvariantCulture);
                     }
                     else
                     {
-                        throw new ApplicationException(String.Format("Message number must be assigned for {0} '{1}'.", containerName, id));
+                        throw new ApplicationException($"Message number must be assigned for {containerName} '{id}'.");
                     }
 
                     // check for message number collisions
                     if (usedNumbers.Contains(number))
                     {
-                        throw new ApplicationException(String.Format("Collision detected between two or more messages with number '{0}'.", number));
+                        throw new ApplicationException($"Collision detected between two or more messages with number '{number}'.");
                     }
 
                     usedNumbers.Add(number, null);
 
-                    if ("no" == messageElement.GetAttribute("SourceLineNumbers"))
+                    if (messageElement.GetAttribute("SourceLineNumbers") == "no")
                     {
                         sourceLineNumbers = false;
                     }
@@ -111,8 +123,13 @@ namespace WixBuildTools.MsgGen
                     int instanceCount = 0;
                     foreach (XmlElement instanceElement in messageElement.ChildNodes)
                     {
+                        if (instanceElement == null)
+                        {
+                            throw new InvalidOperationException("XmlElement is null");
+                        }
+
                         string formatString = instanceElement.InnerText.Trim();
-                        string resourceName = String.Concat(className, "_", id, "_", (++instanceCount).ToString());
+                        string resourceName = string.Concat(className, "_", id, "_", (++instanceCount).ToString(CultureInfo.CurrentCulture));
 
                         // create a resource
                         resourceWriter.AddResource(resourceName, formatString);
@@ -162,9 +179,12 @@ namespace WixBuildTools.MsgGen
 
                         foreach (XmlNode parameterNode in instanceElement.ChildNodes)
                         {
-                            XmlElement parameterElement;
+                            if (parameterNode == null)
+                            {
+                                throw new InvalidOperationException("XmlElement is null");
+                            }
 
-                            if (null != (parameterElement = parameterNode as XmlElement))
+                            if (parameterNode is XmlElement parameterElement)
                             {
                                 string type = parameterElement.GetAttribute("Type");
                                 string name = parameterElement.GetAttribute("Name");
@@ -179,6 +199,7 @@ namespace WixBuildTools.MsgGen
                     }
                 }
             }
+#pragma warning restore CS8606 // Possible null reference assignment to iteration variable
         }
 
         /// <summary>
@@ -207,7 +228,7 @@ namespace WixBuildTools.MsgGen
             resourceManager.Attributes = MemberAttributes.Private | MemberAttributes.Static;
             resourceManager.Name = "resourceManager";
             resourceManager.Type = new CodeTypeReference("ResourceManager");
-            resourceManager.InitExpression = new CodeObjectCreateExpression("ResourceManager", new CodeSnippetExpression(String.Format("\"{0}.{1}\"", namespaceName, resourcesName)), new CodeSnippetExpression("Assembly.GetExecutingAssembly()"));
+            resourceManager.InitExpression = new CodeObjectCreateExpression("ResourceManager", new CodeSnippetExpression($"\"{namespaceName}.{resourcesName}\""), new CodeSnippetExpression("Assembly.GetExecutingAssembly()"));
             messageContainer.Members.Add(resourceManager);
 
             // constructor parameters
@@ -223,7 +244,7 @@ namespace WixBuildTools.MsgGen
             constructor.BaseConstructorArgs.Add(new CodeArgumentReferenceExpression("messageArgs"));
 
             // assign base.Level if messageLevel is specified
-            if (!String.IsNullOrEmpty(messageLevel))
+            if (!string.IsNullOrEmpty(messageLevel))
             {
                 CodePropertyReferenceExpression levelReference = new CodePropertyReferenceExpression(new CodeBaseReferenceExpression(), "Level");
                 CodeFieldReferenceExpression messageLevelField = new CodeFieldReferenceExpression(new CodeTypeReferenceExpression("MessageLevel"), messageLevel);
@@ -234,15 +255,6 @@ namespace WixBuildTools.MsgGen
             CodePropertyReferenceExpression baseResourceManagerReference = new CodePropertyReferenceExpression(new CodeBaseReferenceExpression(), "ResourceManager");
             CodeFieldReferenceExpression resourceManagerField = new CodeFieldReferenceExpression(null, "resourceManager");
             constructor.Statements.Add(new CodeAssignStatement(baseResourceManagerReference, resourceManagerField));
-
-            //CodeMemberProperty resourceManagerProperty = new CodeMemberProperty();
-            //resourceManagerProperty.Attributes = MemberAttributes.Public | MemberAttributes.Override;
-            //resourceManagerProperty.Name = "ResourceManager";
-            //resourceManagerProperty.Type = new CodeTypeReference("ResourceManager");
-            //CodeFieldReferenceExpression resourceManagerReference = new CodeFieldReferenceExpression();
-            //resourceManagerReference.FieldName = "resourceManager";
-            //resourceManagerProperty.GetStatements.Add(new CodeMethodReturnStatement(resourceManagerReference));
-            //messageContainer.Members.Add(resourceManagerProperty);
 
             return messageContainer;
         }
