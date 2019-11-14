@@ -1,17 +1,18 @@
-// Copyright (c) .NET Foundation and contributors. All rights reserved. Licensed under the Microsoft Reciprocal License. See LICENSE.TXT file in the project root for full license information.
+// Copyright (c) William Kent and .NET Foundation. All rights reserved.
+// Licensed under the Ms-RL license. See LICENSE file in the project root for full license information.
+
+using System;
+using System.CodeDom;
+using System.CodeDom.Compiler;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.IO;
+using System.Xml;
+using System.Xml.Schema;
+using Microsoft.CSharp;
 
 namespace WixToolset.Tools
 {
-    using System;
-    using System.CodeDom;
-    using System.CodeDom.Compiler;
-    using System.Collections;
-    using System.IO;
-    using System.Xml;
-    using System.Xml.Schema;
-    using Microsoft.CSharp;
-    using WixToolset;
-
     /// <summary>
     /// Generates a strongly-typed C# class from an XML schema (XSD).
     /// </summary>
@@ -24,10 +25,13 @@ namespace WixToolset.Tools
         private bool showHelp;
 
         /// <summary>
-        /// Constructor for the XsdGen class.
+        /// The main entry point for XsdGen.
         /// </summary>
         /// <param name="args">Command-line arguments passed to the program.</param>
+        [SuppressMessage("StyleCop.CSharp.DocumentationRules", "SA1642:Constructor summary documentation should begin with standard text", Justification = "This is not a typical constructor; it is really part of the Main method.")]
+#pragma warning disable CS8618 // Non-nullable fields are initialized in ParseCommandLineArgs() method.
         private XsdGen(string[] args)
+#pragma warning restore CS8618
         {
             this.ParseCommandlineArgs(args);
 
@@ -41,21 +45,20 @@ namespace WixToolset.Tools
             // ensure that the schema file exists
             if (!File.Exists(this.xsdFile))
             {
-                throw new ApplicationException(String.Format("Schema file does not exist: '{0}'.", this.xsdFile));
+                throw new ApplicationException(string.Format(CultureInfo.InvariantCulture, "Schema file does not exist: '{0}'.", this.xsdFile));
             }
 
-            XmlSchema document = null;
+            XmlSchema document;
             using (StreamReader xsdFileReader = new StreamReader(this.xsdFile))
+            using (XmlTextReader reader = new XmlTextReader(xsdFileReader))
             {
-                document = XmlSchema.Read(xsdFileReader, new ValidationEventHandler(this.ValidationHandler));
+                document = XmlSchema.Read(reader, new ValidationEventHandler(this.ValidationHandler));
             }
 
             CodeCompileUnit codeCompileUnit = StronglyTypedClasses.Generate(document, this.outputNamespace, this.commonNamespace);
 
             using (CSharpCodeProvider codeProvider = new CSharpCodeProvider())
             {
-                ICodeGenerator generator = codeProvider.CreateGenerator();
-
                 CodeGeneratorOptions options = new CodeGeneratorOptions();
                 options.BlankLinesBetweenMembers = true;
                 options.BracingStyle = "C";
@@ -63,7 +66,7 @@ namespace WixToolset.Tools
 
                 using (StreamWriter csharpFileWriter = new StreamWriter(this.outFile))
                 {
-                    generator.GenerateCodeFromCompileUnit(codeCompileUnit, csharpFileWriter, options);
+                    codeProvider.GenerateCodeFromCompileUnit(codeCompileUnit, csharpFileWriter, options);
                 }
             }
         }
@@ -74,6 +77,7 @@ namespace WixToolset.Tools
         /// <param name="args">The command line arguments.</param>
         /// <returns>The error code.</returns>
         [STAThread]
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Need to catch any exception so it can be reported to the user.")]
         public static int Main(string[] args)
         {
             try
@@ -104,7 +108,7 @@ namespace WixToolset.Tools
         /// <param name="args">Command-line arguments.</param>
         private void ParseCommandlineArgs(string[] args)
         {
-            if (3 > args.Length)
+            if (args.Length < 3)
             {
                 this.showHelp = true;
             }
