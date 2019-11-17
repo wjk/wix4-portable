@@ -138,7 +138,7 @@ namespace WixToolset.Serialize
         /// <param name="schemaElement">Schema element to set attribute on.</param>
         /// <param name="name">Name of the attribute to set.</param>
         /// <param name="value">Value to set on the attribute.</param>
-        private void SetAttributeOnObject(ISchemaElement schemaElement, string name, string value)
+        private static void SetAttributeOnObject(ISchemaElement schemaElement, string name, string value)
         {
             if (!(schemaElement is ISetAttributes setAttributes))
             {
