@@ -138,7 +138,8 @@ namespace WixToolset.Serialize
         /// <param name="schemaElement">Schema element to set attribute on.</param>
         /// <param name="name">Name of the attribute to set.</param>
         /// <param name="value">Value to set on the attribute.</param>
-        private static void SetAttributeOnObject(ISchemaElement schemaElement, string name, string value)
+        #pragma warning disable CA1822
+        private void SetAttributeOnObject(ISchemaElement schemaElement, string name, string value)
         {
             if (!(schemaElement is ISetAttributes setAttributes))
             {
@@ -149,6 +150,7 @@ namespace WixToolset.Serialize
                 setAttributes.SetAttribute(name, value);
             }
         }
+        #pragma warning restore CA1822
 
         /// <summary>
         /// Creates an object from an XML element by digging through the assembly list.
